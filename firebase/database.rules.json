@@ -13,33 +13,80 @@
         ".write": "auth != null && root.child('admins/' + auth.uid).val() === true && (!data.exists() || data.child('meta/host').val() === auth.uid || data.child('meta/createdAt').val() < now - 604800000)",
         "meta": {
           ".validate": "newData.hasChildren(['host', 'cls', 'createdAt', 'maxTeams'])",
-          "host": { ".validate": "newData.val() === auth.uid" },
-          "cls": { ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 12" },
-          "createdAt": { ".validate": "newData.isNumber() && newData.val() <= now + 60000" },
-          "maxTeams": { ".validate": "newData.isNumber() && newData.val() >= 2 && newData.val() <= 12" },
-          "$other": { ".validate": false }
+          "host": {
+            ".validate": "newData.val() === auth.uid"
+          },
+          "cls": {
+            ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 12"
+          },
+          "createdAt": {
+            ".validate": "newData.isNumber() && newData.val() <= now + 60000"
+          },
+          "maxTeams": {
+            ".validate": "newData.isNumber() && newData.val() >= 2 && newData.val() <= 12"
+          },
+          "$other": {
+            ".validate": false
+          }
         },
         "state": {
           ".validate": "newData.hasChildren(['phase', 'round'])",
-          "phase": { ".validate": "newData.isString() && newData.val().matches(/^(lobby|pick|count|result|end)$/)" },
-          "round": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 99" },
-          "algo": { ".validate": "newData.isString() && newData.val().matches(/^(bubble|selection|insertion|merge|pick)$/)" },
-          "n": { ".validate": "newData.isNumber() && newData.val() >= 4 && newData.val() <= 12" },
-          "seed": { ".validate": "newData.isNumber()" },
-          "startAt": { ".validate": "newData.isNumber()" },
-          "pickUntil": { ".validate": "newData.isNumber()" },
-          "final": { ".validate": "newData.isBoolean()" },
-          "$other": { ".validate": false }
+          "phase": {
+            ".validate": "newData.isString() && newData.val().matches(/^(lobby|pick|count|result|end)$/)"
+          },
+          "round": {
+            ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 99"
+          },
+          "algo": {
+            ".validate": "newData.isString() && newData.val().matches(/^(bubble|selection|insertion|merge|pick)$/)"
+          },
+          "n": {
+            ".validate": "newData.isNumber() && newData.val() >= 4 && newData.val() <= 12"
+          },
+          "seed": {
+            ".validate": "newData.isNumber()"
+          },
+          "startAt": {
+            ".validate": "newData.isNumber()"
+          },
+          "pickUntil": {
+            ".validate": "newData.isNumber()"
+          },
+          "final": {
+            ".validate": "newData.isBoolean()"
+          },
+          "pausedAt": {
+            ".validate": "newData.isNumber()"
+          },
+          "pauseTotal": {
+            ".validate": "newData.isNumber() && newData.val() >= 0"
+          },
+          "relay": {
+            ".validate": "newData.isBoolean()"
+          },
+          "$other": {
+            ".validate": false
+          }
         },
         "teams": {
           "$t": {
             ".write": "auth != null && ((!data.exists() && newData.child('uid').val() === auth.uid) || data.child('uid').val() === auth.uid)",
             ".validate": "!newData.exists() || ($t.matches(/^([1-9]|1[0-2])$/) && newData.hasChildren(['uid', 'members', 'at']) && root.child('rooms/' + $code + '/meta').exists())",
-            "uid": { ".validate": "newData.isString()" },
-            "nick": { ".validate": "newData.isString() && newData.val().length <= 8" },
-            "members": { ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 6" },
-            "at": { ".validate": "newData.isNumber()" },
-            "$other": { ".validate": false }
+            "uid": {
+              ".validate": "newData.isString()"
+            },
+            "nick": {
+              ".validate": "newData.isString() && newData.val().length <= 8"
+            },
+            "members": {
+              ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 6"
+            },
+            "at": {
+              ".validate": "newData.isNumber()"
+            },
+            "$other": {
+              ".validate": false
+            }
           }
         },
         "pick": {
@@ -55,15 +102,75 @@
             "$t": {
               ".write": "auth != null && root.child('rooms/' + $code + '/teams/' + $t + '/uid').val() === auth.uid && data.child('done').val() !== true && root.child('rooms/' + $code + '/state/round').val() + '' === $round",
               ".validate": "newData.hasChildren(['algo', 'pct', 'ms', 'score', 'miss', 'cmp', 'moves', 'done'])",
-              "algo": { ".validate": "newData.isString() && newData.val().matches(/^(bubble|selection|insertion|merge)$/)" },
-              "pct": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 100" },
-              "ms": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 3600000" },
-              "score": { ".validate": "newData.isNumber() && newData.val() >= 0" },
-              "miss": { ".validate": "newData.isNumber() && newData.val() >= 0" },
-              "cmp": { ".validate": "newData.isNumber() && newData.val() >= 0" },
-              "moves": { ".validate": "newData.isNumber() && newData.val() >= 0" },
-              "done": { ".validate": "newData.isBoolean()" },
-              "$other": { ".validate": false }
+              "algo": {
+                ".validate": "newData.isString() && newData.val().matches(/^(bubble|selection|insertion|merge)$/)"
+              },
+              "pct": {
+                ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 100"
+              },
+              "ms": {
+                ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 3600000"
+              },
+              "score": {
+                ".validate": "newData.isNumber() && newData.val() >= 0"
+              },
+              "miss": {
+                ".validate": "newData.isNumber() && newData.val() >= 0"
+              },
+              "cmp": {
+                ".validate": "newData.isNumber() && newData.val() >= 0"
+              },
+              "moves": {
+                ".validate": "newData.isNumber() && newData.val() >= 0"
+              },
+              "done": {
+                ".validate": "newData.isBoolean()"
+              },
+              "nick": {
+                ".validate": "newData.isString() && newData.val().length <= 8"
+              },
+              "quit": {
+                ".validate": "newData.isBoolean()"
+              },
+              "$other": {
+                ".validate": false
+              }
+            }
+          }
+        },
+        "live": {
+          "$t": {
+            ".write": "auth != null && root.child('rooms/' + $code + '/teams/' + $t + '/uid').val() === auth.uid",
+            ".validate": "newData.hasChildren(['at'])",
+            "r0": {
+              ".validate": "newData.isString() && newData.val().length <= 80"
+            },
+            "r0x": {
+              ".validate": "newData.isString() && newData.val().length <= 40"
+            },
+            "r1": {
+              ".validate": "newData.isString() && newData.val().length <= 80"
+            },
+            "n": {
+              ".validate": "newData.isNumber() && newData.val() <= 12"
+            },
+            "who": {
+              ".validate": "newData.isNumber() && newData.val() <= 6"
+            },
+            "ev": {
+              ".validate": "newData.isString() && newData.val().length <= 6"
+            },
+            "on": {
+              ".validate": "newData.isBoolean()"
+            },
+            "round": {
+              ".validate": "newData.isNumber()"
+            },
+            "at": {
+              ".validate": "newData.isNumber()"
+            },
+            "$other": {
+              ".validate": false
             }
           }
         }
@@ -76,36 +183,79 @@
         "$rid": {
           ".write": "auth != null && root.child('admins/' + auth.uid).val() === true",
           ".validate": "!newData.exists() || newData.hasChildren(['date', 'code'])",
-          "date": { ".validate": "newData.isString() && newData.val().matches(/^20[0-9][0-9]-[0-9][0-9]-[0-9][0-9]$/)" },
-          "code": { ".validate": "newData.isString()" },
+          "date": {
+            ".validate": "newData.isString() && newData.val().matches(/^20[0-9][0-9]-[0-9][0-9]-[0-9][0-9]$/)"
+          },
+          "code": {
+            ".validate": "newData.isString()"
+          },
           "rounds": {
             "$r": {
               ".validate": "newData.hasChildren(['algo', 'n', 'results'])",
-              "algo": { ".validate": "newData.isString()" },
-              "n": { ".validate": "newData.isNumber()" },
-              "arr": { ".validate": "newData.isString() && newData.val().length <= 80" },
-              "final": { ".validate": "newData.isBoolean()" },
-              "at": { ".validate": "newData.isNumber()" },
+              "algo": {
+                ".validate": "newData.isString()"
+              },
+              "n": {
+                ".validate": "newData.isNumber()"
+              },
+              "arr": {
+                ".validate": "newData.isString() && newData.val().length <= 80"
+              },
+              "final": {
+                ".validate": "newData.isBoolean()"
+              },
+              "at": {
+                ".validate": "newData.isNumber()"
+              },
               "results": {
                 "$t": {
                   ".validate": "newData.hasChildren(['score'])",
-                  "nick": { ".validate": "newData.isString() && newData.val().length <= 8" },
-                  "algo": { ".validate": "newData.isString()" },
-                  "score": { ".validate": "newData.isNumber()" },
-                  "ms": { ".validate": "newData.isNumber()" },
-                  "miss": { ".validate": "newData.isNumber()" },
-                  "cmp": { ".validate": "newData.isNumber()" },
-                  "moves": { ".validate": "newData.isNumber()" },
-                  "pct": { ".validate": "newData.isNumber()" },
-                  "done": { ".validate": "newData.isBoolean()" },
-                  "place": { ".validate": "newData.isNumber()" },
-                  "$other": { ".validate": false }
+                  "nick": {
+                    ".validate": "newData.isString() && newData.val().length <= 8"
+                  },
+                  "algo": {
+                    ".validate": "newData.isString()"
+                  },
+                  "score": {
+                    ".validate": "newData.isNumber()"
+                  },
+                  "ms": {
+                    ".validate": "newData.isNumber()"
+                  },
+                  "miss": {
+                    ".validate": "newData.isNumber()"
+                  },
+                  "cmp": {
+                    ".validate": "newData.isNumber()"
+                  },
+                  "moves": {
+                    ".validate": "newData.isNumber()"
+                  },
+                  "pct": {
+                    ".validate": "newData.isNumber()"
+                  },
+                  "done": {
+                    ".validate": "newData.isBoolean()"
+                  },
+                  "place": {
+                    ".validate": "newData.isNumber()"
+                  },
+                  "quit": {
+                    ".validate": "newData.isBoolean()"
+                  },
+                  "$other": {
+                    ".validate": false
+                  }
                 }
               },
-              "$other": { ".validate": false }
+              "$other": {
+                ".validate": false
+              }
             }
           },
-          "$other": { ".validate": false }
+          "$other": {
+            ".validate": false
+          }
         }
       }
     }

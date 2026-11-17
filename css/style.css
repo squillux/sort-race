@@ -198,3 +198,43 @@ table.t th{color:var(--muted);font-weight:700;background:var(--bg)}
   85%,100%{transform:rotate(180deg)}
 }
 @media (prefers-reduced-motion:reduce){.hourglass{animation:none}}
+
+/* 회전·단계 알림(조작을 막지 않음) */
+.bdwrap{position:relative}
+.banner{position:absolute;left:50%;top:10px;transform:translateX(-50%);z-index:5;background:var(--ink);color:#fff;font-weight:800;padding:8px 18px;border-radius:999px;white-space:nowrap;max-width:94%;overflow:hidden;text-overflow:ellipsis;pointer-events:none;box-shadow:0 6px 18px rgba(0,0,0,.18)}
+.overlay.pause .box{background:var(--brand-soft)}
+
+/* 교사: 레이스 조작 막대 */
+.ctlbar{margin:12px 0 4px}
+.ctlbar .sp{flex:1}
+.pausenote{background:var(--yellow-soft);color:var(--on-ink);border-radius:12px;padding:8px 14px;font-weight:700;margin:6px 0}
+.lane.gone{opacity:.55}
+
+/* 🖥 모니터링 */
+.monitor{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px;margin-top:10px}
+.mcard{background:var(--bg);border-radius:14px;padding:10px;border:2px solid transparent;transition:border-color .2s}
+.mcard.fin{background:var(--ok-soft)}
+.mcard.gone{opacity:.55}
+.mcard.flash{animation:mflash .9s}
+@keyframes mflash{0%,60%{border-color:var(--bad);background:var(--bad-soft)}}
+.mh{display:flex;justify-content:space-between;gap:8px;font-size:.95rem}
+.mh .ms{font-weight:800;color:var(--brand)}
+.mf{color:var(--muted);margin-top:4px}
+.mini{position:relative;height:120px;margin-top:6px}
+.mini.two{height:170px}
+.mrow{position:relative;height:120px}
+.mini.two .mrow{height:82px}
+.mini.two .r1{border-top:2px dashed #cfd8ea;margin-top:4px}
+.mb{font-style:normal;position:absolute;bottom:0;height:100%;padding:0 2px;display:flex;flex-direction:column;justify-content:flex-end}
+.mb s{display:block;border-radius:4px 4px 2px 2px;background:#7da0ff;text-decoration:none}
+.mb b{font-size:.62rem;text-align:center;line-height:1.3;height:1.3em;color:var(--ink)}
+.mb.c-a s{background:var(--on)}
+.mb.c-l s{background:var(--mint)}
+.mb.c-s s{background:#3cc6b6}
+.mb.c-k s{background:var(--pink)}
+.mb.c-k{transform:translateY(-8px)}
+.mb.c-h s{background:var(--brand);outline:2px solid var(--ink);outline-offset:-1px}
+.mb.c-o s{background:var(--violet)}
+.mb.c-p s{background:#9db6ff}
+.btn.danger{background:var(--bad);color:#fff}
+.overlay.confirm .box{border-top:8px solid var(--bad)}

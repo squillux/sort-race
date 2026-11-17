@@ -59,3 +59,17 @@ export function segButtons(el, items, value, onPick) {
     onPick(b.dataset.v);
   }));
 }
+
+// 확인 팝업 (브라우저 기본 confirm 대신): 버튼을 누르면 true/false
+export function confirmBox({ icon = '⚠️', title, body = '', ok = '확인', cancel = '취소', danger = false }) {
+  return new Promise(res => {
+    const o = overlay(`<div style="font-size:3rem;line-height:1">${icon}</div><h2 style="margin:.3em 0">${esc(title)}</h2><p class="muted" style="margin:0 0 16px">${body}</p>
+      <div class="row" style="justify-content:center"><button class="btn lg cb-cancel">${esc(cancel)}</button><button class="btn lg ${danger ? 'danger' : 'sub'} cb-ok">${esc(ok)}</button></div>`, 'confirm');
+    const done = v => { o.remove(); document.removeEventListener('keydown', key); res(v); };
+    const key = e => { if (e.key === 'Escape') done(false); };
+    document.addEventListener('keydown', key);
+    o.querySelector('.cb-cancel').addEventListener('click', () => done(false));
+    o.querySelector('.cb-ok').addEventListener('click', () => done(true));
+    o.querySelector('.cb-cancel').focus();
+  });
+}

@@ -57,8 +57,14 @@ export const bad = v => { const s = String(v).toLowerCase().replace(/[\s._*~!?,-
 export const today = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
 
 // 순위: 완주 팀은 기록(시간+벌점) 오름차순, 미완주 팀은 진행률 내림차순
+// 모둠 목록(teams)과 진행 기록(prog)을 합쳐서, 중간에 나간 모둠도 기록이 있으면 남겨요.
 export function rank(teams, prog) {
-  const rows = Object.entries(teams || {}).map(([t, tm]) => ({ t: +t, nick: tm.nick || '', members: tm.members, ...(prog?.[t] || {}) }));
+  teams = teams || {}; prog = prog || {};
+  const ids = new Set([...Object.keys(teams), ...Object.keys(prog).filter(k => prog[k])]);
+  const rows = [...ids].map(t => {
+    const tm = teams[t], p = prog[t] || {};
+    return { t: +t, ...p, nick: tm?.nick || p.nick || '', members: tm?.members, left: !tm };
+  });
   rows.sort((a, b) => (b.done ? 1 : 0) - (a.done ? 1 : 0) || (a.done ? a.score - b.score : (b.pct || 0) - (a.pct || 0)) || a.t - b.t);
   let place = 0; rows.forEach((x, i) => { if (x.done) x.place = ++place; });
   return rows;

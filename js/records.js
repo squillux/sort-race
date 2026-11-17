@@ -55,7 +55,7 @@ export function mountRecords(root) {
         const res = Object.entries(ro.results || {}).map(([t, x]) => ({ t: +t, ...x })).sort((a, b) => (a.place || 99) - (b.place || 99));
         return `<p style="margin:10px 0 4px"><b>${ro.final ? '🏆 결승' : rd + '라운드'}</b> · ${ro.algo === 'pick' ? '모둠별 선택' : esc(ALGOS[ro.algo]?.name || ro.algo)} · 막대 ${ro.n}개</p>
         <div class="scroll-x"><table class="t"><tr><th>순위</th><th>모둠</th><th>방법</th><th>기록</th><th>위반</th><th>비교</th></tr>
-        ${res.map(x => `<tr><td>${x.place ? x.place + '위' : '미완주'}</td><td>${esc(teamName(x.t, x.nick))}</td><td>${esc(ALGOS[x.algo]?.short || '')}</td><td>${x.done ? fmt(x.score) : x.pct + '%'}</td><td>${x.miss}</td><td>${x.cmp}</td></tr>`).join('')}</table></div>`;
+        ${res.map(x => `<tr><td>${x.place ? x.place + '위' : x.quit ? '❌ 실패(나감)' : '미완주'}</td><td>${esc(teamName(x.t, x.nick))}</td><td>${esc(ALGOS[x.algo]?.short || '')}</td><td>${x.done ? fmt(x.score) : x.pct + '%'}</td><td>${x.miss}</td><td>${x.cmp}</td></tr>`).join('')}</table></div>`;
       }).join('')}</div>`).join('');
     el.querySelectorAll('.del').forEach(btn => btn.addEventListener('click', async () => {
       if (!confirm('이 수업의 기록을 삭제할까요? 되돌릴 수 없어요.')) return;
@@ -88,7 +88,7 @@ export function mountRecords(root) {
     const head = ['반', '날짜', '방코드', '라운드', '결승', '라운드방법', '막대수', '배열', '모둠', '별명', '모둠방법', '순위', '완주', '기록(초)', '시간(초)', '위반', '비교', '이동', '진행률'];
     const q = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
     const lines = [head.map(q).join(',')].concat(rows.sort((a, b) => a.cls - b.cls || a.date.localeCompare(b.date) || a.round - b.round || (a.place || 99) - (b.place || 99))
-      .map(x => [x.cls, x.date, x.code, x.round, x.final ? 'O' : '', x.roundAlgo, x.n, x.arr, x.t, x.nick, ALGOS[x.algo]?.name || x.algo, x.place || '', x.done ? 'O' : 'X', (x.score / 1000).toFixed(1), (x.ms / 1000).toFixed(1), x.miss, x.cmp, x.moves, x.pct].map(q).join(',')));
+      .map(x => [x.cls, x.date, x.code, x.round, x.final ? 'O' : '', x.roundAlgo, x.n, x.arr, x.t, x.nick, ALGOS[x.algo]?.name || x.algo, x.place || '', x.done ? 'O' : x.quit ? '실패(나감)' : 'X', (x.score / 1000).toFixed(1), (x.ms / 1000).toFixed(1), x.miss, x.cmp, x.moves, x.pct].map(q).join(',')));
     const blob = new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `막대정렬레이스_기록_${new Date().toISOString().slice(0, 10)}.csv`; a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 2000);

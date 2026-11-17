@@ -7,16 +7,16 @@ import { $, esc, fmt, store, segButtons, countdown } from './ui.js';
 const BEST_KEY = 'sr-best';
 
 export function mountPractice(root) {
-  let algo = 'bubble', n = 8, members = 4, hint = false, runner = null;
+  let algo = 'bubble', n = 8, members = 4, hint = false, relay = false, runner = null;
   const best = store(BEST_KEY) || {};
 
   root.innerHTML = `
     <h1>🏃 연습하기</h1>
-    <p class="lead">대항전 전에 모둠끼리 연습해요. 5번 조작할 때마다 <b>다음 사람</b>에게 차례가 넘어가요. 규칙을 어기면 3초가 더해져요.</p>
+    <p class="lead">대항전 전에 모둠끼리 연습해요. 규칙을 어기면 3초가 더해져요.</p>
     <div class="card setup">
       <div class="row"><b>정렬 방법</b><span class="algos"></span></div>
-      <div class="row" style="margin-top:8px"><b>막대 수</b><span class="ns"></span>
-        <b style="margin-left:10px">모둠 인원</b><span class="mem"></span></div>
+      <div class="row" style="margin-top:8px"><b>막대 수</b><span class="ns"></span></div>
+      <div class="row" style="margin-top:8px"><label><input type="checkbox" class="relaychk"> 🎮 릴레이 교대 알림 (5번 조작마다 다음 사람에게)</label><span class="memwrap" hidden><b>모둠 인원</b> <span class="mem"></span></span></div>
       <div class="row" style="margin-top:8px"><label><input type="checkbox" class="hintchk"> 💡 힌트 켜기 (힌트를 켜면 최고 기록에는 남지 않아요)</label></div>
       <p class="bestline small muted"></p>
       <button class="btn lg start">▶ 시작</button>
@@ -32,6 +32,7 @@ export function mountPractice(root) {
   segButtons($('.ns', root), [6, 8, 10].map(x => ({ v: String(x), label: x + '개' })), String(n), v => { n = +v; paintBest(); });
   segButtons($('.mem', root), [1, 2, 3, 4, 5, 6].map(x => ({ v: String(x), label: x + '명' })), String(members), v => { members = +v; });
   $('.hintchk', root).addEventListener('change', e => { hint = e.target.checked; runner?.setHint(hint); });
+  $('.relaychk', root).addEventListener('change', e => { relay = e.target.checked; $('.memwrap', root).hidden = !relay; });
   paintBest();
 
   $('.start', root).addEventListener('click', async () => {
@@ -41,7 +42,7 @@ export function mountPractice(root) {
     $('.setup', root).hidden = true;
     const startAt = performance.now() + 3000;
     const usedHint = hint;
-    runner = createRunner($('.play', root), { algo, arr, members, hint, startAt, now: () => performance.now(), onDone: s => done(s, arr, usedHint || runner?.hintUsed) });
+    runner = createRunner($('.play', root), { algo, arr, members, relay, hint, startAt, now: () => performance.now(), onDone: s => done(s, arr, usedHint || runner?.hintUsed) });
     await countdown(startAt, () => performance.now());
   });
 

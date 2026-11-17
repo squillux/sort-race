@@ -1,5 +1,6 @@
 // 대항전 · 교사 화면 (TV에 띄워요)
 import { ALGOS, ALGO_KEYS, makeArray, compareAll } from './sorts.js';
+import { drawMini } from './board.js';
 import { sfx, unlock } from './sound.js';
 import { connect, ready, signInTeacher, isAdmin, r, rank, today, teamName } from './net.js';
 import { $, esc, fmt, toast, countdown, store, segButtons } from './ui.js';
@@ -8,9 +9,11 @@ const HOST_KEY = 'sr-host';
 const MEDAL = ['🥇', '🥈', '🥉'];
 
 export function mountHost(root) {
-  let f = null, me = null, code = null, meta = null, st = null, teams = {}, prog = {}, picks = {}, unsub = [], progUnsub = null, pickUnsub = null, raf = 0, finishedSeen = new Set(), saved = new Set(), autoPickTimer = null;
-  let cfg = { algo: 'bubble', n: 8, final: false };
-  const off = () => { unsub.forEach(u => u()); unsub = []; progUnsub?.(); progUnsub = null; pickUnsub?.(); pickUnsub = null; cancelAnimationFrame(raf); clearTimeout(autoPickTimer); };
+  let f = null, me = null, code = null, meta = null, st = null, teams = {}, prog = {}, picks = {}, live = {}, unsub = [], progUnsub = null, pickUnsub = null, liveUnsub = null, raf = 0, finishedSeen = new Set(), saved = new Set(), autoPickTimer = null, view = 'race';
+  let cfg = { algo: 'bubble', n: 8, final: false, relay: false };
+  const off = () => { unsub.forEach(u => u()); unsub = []; progUnsub?.(); progUnsub = null; pickUnsub?.(); pickUnsub = null; liveUnsub?.(); liveUnsub = null; cancelAnimationFrame(raf); clearTimeout(autoPickTimer); };
+  // 멈춘 시간을 뺀 경과 시간 기준 시각
+  const effNow = () => { const n = f.serverNow(); return n - (st?.pauseTotal || 0) - (st?.pausedAt ? n - st.pausedAt : 0); };
 
   root.innerHTML = '<div class="host"></div>';
   const box = $('.host', root);
@@ -114,7 +117,8 @@ export function mountHost(root) {
       <div class="main"></div>`;
     drawQr($('.qr', box), joinUrl(c));
     $('.endbtn', box).addEventListener('click', async () => {
-      if (!confirm('대항전을 끝낼까요? 학생 화면에 종료 안내가 나와요. (기록은 남아요)')) return;
+      if (!confirm('대항전을 끝낼까요? 학생 화면에 종료 안내가 나와요. (진행 중인 라운드 기록도 저장돼요)')) return;
+      if (st?.phase === 'count' || st?.phase === 'result') await saveRecord();
       await f.D.update(r(f, `rooms/${code}/state`), { phase: 'end' }); store(HOST_KEY, null); setupView();
     });
     unsub.push(f.D.onValue(r(f, `rooms/${c}/meta`), s => { meta = s.val(); if (meta) $('.clsname', box).textContent = meta.cls + '반'; }));
@@ -132,10 +136,12 @@ export function mountHost(root) {
       if (st.round > 0) {
         progUnsub = f.D.onValue(r(f, `rooms/${code}/prog/${st.round}`), s => { prog = s.val() || {}; onProg(); });
         pickUnsub = f.D.onValue(r(f, `rooms/${code}/pick/${st.round}`), s => { picks = s.val() || {}; if (st.phase === 'pick') render(); });
+        liveUnsub?.(); liveUnsub = f.D.onValue(r(f, `rooms/${code}/live`), s => { live = s.val() || {}; if (st.phase === 'count' && view === 'monitor') updateMonitor(); });
       }
     }
     if (st.phase === 'count' && prev?.phase !== 'count' && f.serverNow() < st.startAt) countdown(st.startAt, () => f.serverNow());
     if (st.phase === 'pick') schedulePick();
+    if (prev && prev.phase === 'count' && st.phase === 'count' && prev.round === st.round) { paintPause(); return; }
     render();
   }
 
@@ -144,7 +150,9 @@ export function mountHost(root) {
       finishedSeen.add(t);
       if (finishedSeen.size === 1) sfx.fanfare(); else sfx.ding();
     }
-    if (st.phase === 'count') updateLanes();
+    if (st.phase === 'count') { updateLanes(); if (view === 'monitor') updateMonitor(); }
+    const rows = rank(teams, prog);
+    if (st.phase === 'count' && rows.length && rows.every(x => x.done || x.quit || x.left)) saveRecord(true);
   }
 
   function schedulePick() {
@@ -156,14 +164,14 @@ export function mountHost(root) {
   async function go(extra = {}) {
     unlock();
     const round = st.phase === 'pick' ? st.round : (st.round || 0) + 1;
-    const next = { phase: 'count', round, algo: extra.algo || cfg.algo, n: cfg.n, seed: st.phase === 'pick' ? st.seed : Math.floor(Math.random() * 2e9), startAt: f.serverNow() + 4000, final: !!(extra.algo === 'pick' || cfg.final) };
+    const next = { phase: 'count', round, algo: extra.algo || cfg.algo, n: cfg.n, seed: st.phase === 'pick' ? st.seed : Math.floor(Math.random() * 2e9), startAt: f.serverNow() + 4000, final: !!(extra.algo === 'pick' || cfg.final), relay: !!cfg.relay, pauseTotal: 0 };
     await f.D.set(r(f, `rooms/${code}/state`), next);
   }
 
   async function startPick() {
     unlock();
     const round = (st.round || 0) + 1;
-    await f.D.set(r(f, `rooms/${code}/state`), { phase: 'pick', round, algo: 'pick', n: cfg.n, seed: Math.floor(Math.random() * 2e9), startAt: 0, pickUntil: f.serverNow() + 30000, final: true });
+    await f.D.set(r(f, `rooms/${code}/state`), { phase: 'pick', round, algo: 'pick', n: cfg.n, seed: Math.floor(Math.random() * 2e9), startAt: 0, pickUntil: f.serverNow() + 30000, final: true, relay: !!cfg.relay });
   }
 
   function render() {
@@ -178,6 +186,7 @@ export function mountHost(root) {
           <h2>⚙ ${(st.round || 0) + 1}라운드 준비</h2>
           <p><b>정렬 방법</b></p><div class="al"></div>
           <p style="margin-top:10px"><b>막대 수</b></p><div class="nn"></div>
+          <p style="margin-top:10px"><label><input type="checkbox" class="relaychk" ${cfg.relay ? 'checked' : ''}> 🎮 릴레이 교대 알림 (5번 조작마다 "다음 사람!")</label></p>
           <div class="row" style="margin-top:14px">
             <button class="btn lg gobtn" ${nTeams ? '' : 'disabled'}>▶ 모두 동시에 출발 (3초 카운트다운)</button>
             <button class="btn on lg pickbtn" ${nTeams ? '' : 'disabled'}>🏆 결승: 모둠이 방법 고르기 (30초)</button>
@@ -186,6 +195,7 @@ export function mountHost(root) {
         </div>`;
       segButtons($('.al', main), ALGO_KEYS.map(k => ({ v: k, html: `${ALGOS[k].icon} ${ALGOS[k].name}${k === 'merge' ? ' <span class="tag dare">도전</span>' : ''}` })), cfg.algo, v => { cfg.algo = v; });
       segButtons($('.nn', main), [6, 8, 10].map(x => ({ v: String(x), label: x + '개' + (x === 10 ? ' (결승 추천)' : '') })), String(cfg.n), v => { cfg.n = +v; });
+      $('.relaychk', main).addEventListener('change', e => { cfg.relay = e.target.checked; });
       $('.gobtn', main).addEventListener('click', () => go());
       $('.pickbtn', main).addEventListener('click', startPick);
       bindKick(main);
@@ -207,12 +217,23 @@ export function mountHost(root) {
       main.innerHTML = `<div class="card race">
         <div class="row" style="justify-content:space-between"><h2 style="margin:0">${st.final ? '🏆 결승' : st.round + '라운드'} · ${st.algo === 'pick' ? '모둠별 선택' : A.icon + ' ' + A.name} · 막대 ${st.n}개</h2>
           <div class="clock mono">0.0초</div></div>
+        <div class="row ctlbar">
+          <span class="seg viewsel"></span>
+          <span class="sp"></span>
+          <button class="btn sub pausebtn">⏸ 일시정지</button>
+          <button class="btn ghost cancelbtn">⏹ 라운드 취소</button>
+        </div>
+        <div class="pausenote" hidden>⏸ 일시정지 중이에요. 학생 화면도 멈춰 있고, 시간도 흐르지 않아요.</div>
         <div class="lanes big"></div>
+        <div class="monitor" hidden></div>
         <div class="row" style="margin-top:12px"><button class="btn on lg reveal">🏆 결과 발표</button><span class="small muted donecnt"></span></div></div>`;
       $('.reveal', main).addEventListener('click', reveal);
-      updateLanes();
+      segButtons($('.viewsel', main), [{ v: 'race', label: '🏁 레이스' }, { v: 'monitor', label: '🖥 모니터링 (모둠 화면)' }], view, v => { view = v; showView(); });
+      $('.pausebtn', main).addEventListener('click', togglePause);
+      $('.cancelbtn', main).addEventListener('click', cancelRound);
+      showView(); paintPause();
       const clock = $('.clock', main);
-      const tick = () => { if (!clock.isConnected) return; clock.textContent = fmt(Math.max(0, f.serverNow() - st.startAt)); raf = requestAnimationFrame(tick); };
+      const tick = () => { if (!clock.isConnected) return; clock.textContent = fmt(Math.max(0, effNow() - st.startAt)); raf = requestAnimationFrame(tick); };
       tick();
       return;
     }
@@ -231,36 +252,89 @@ export function mountHost(root) {
     }));
   }
 
+  const status = x => x.done ? '' : x.quit || x.left ? '❌ 실패(나감)' : '';
+
   function updateLanes() {
     const lanes = $('.lanes.big', box); if (!lanes) return;
     const rows = rank(teams, prog);
     lanes.innerHTML = rows.map(x => {
       const algoName = x.algo ? ALGOS[x.algo].icon + ' ' + ALGOS[x.algo].short : '';
-      return `<div class="lane ${x.done ? 'fin' : ''}">
-        <b class="nm">${x.place ? MEDAL[x.place - 1] || x.place + '위' : '🏃'} ${esc(teamName(x.t, x.nick))}</b>
+      const off = live[x.t] && live[x.t].on === false && !x.done;
+      return `<div class="lane ${x.done ? 'fin' : ''} ${status(x) ? 'gone' : ''}">
+        <b class="nm">${x.place ? MEDAL[x.place - 1] || x.place + '위' : status(x) ? '🚪' : '🏃'} ${esc(teamName(x.t, x.nick))}</b>
         <div class="track"><i style="width:${x.done ? 100 : x.pct || 0}%"></i></div>
-        <span class="tm mono">${x.done ? fmt(x.score) : (x.pct || 0) + '%'}</span>
-        <span class="sub small muted">${st.algo === 'pick' ? algoName + ' · ' : ''}위반 ${x.miss || 0}</span></div>`;
+        <span class="tm mono">${x.done ? fmt(x.score) : status(x) || (x.pct || 0) + '%'}</span>
+        <span class="sub small muted">${st.algo === 'pick' ? algoName + ' · ' : ''}위반 ${x.miss || 0}${off ? ' · <span style="color:var(--bad)">🔴 연결 끊김</span>' : ''}</span></div>`;
     }).join('');
-    const d = rows.filter(x => x.done).length, el = $('.donecnt', box);
-    if (el) el.textContent = `완주 ${d} / ${rows.length}모둠${d === rows.length && rows.length ? ' · 모두 완주했어요! 결과를 발표해 주세요.' : ''}`;
+    const d = rows.filter(x => x.done).length, gone = rows.filter(x => !x.done && (x.quit || x.left)).length, el = $('.donecnt', box);
+    if (el) el.textContent = `완주 ${d} / ${rows.length}모둠${gone ? ` (나감 ${gone})` : ''}${d + gone === rows.length && rows.length ? ' · 모두 끝났어요! 기록은 저장했어요. 결과를 발표해 주세요.' : ''}`;
+  }
+
+  // 🖥 모니터링: 모둠 화면의 막대 상태를 그대로 다시 그려요
+  function showView() {
+    const lanes = $('.lanes.big', box), mon = $('.monitor', box); if (!lanes || !mon) return;
+    lanes.hidden = view !== 'race'; mon.hidden = view !== 'monitor';
+    if (view === 'monitor') updateMonitor(); else updateLanes();
+  }
+  function updateMonitor() {
+    const mon = $('.monitor', box); if (!mon || mon.hidden) return;
+    const rows = rank(teams, prog).sort((a, b) => a.t - b.t);
+    if (!rows.length) { mon.innerHTML = '<p class="muted">입장한 모둠이 없어요.</p>'; return; }
+    // 칸은 한 번만 만들고 내용만 바꿔요(깜빡임 방지)
+    const want = rows.map(x => x.t).join(',');
+    if (mon.dataset.ids !== want) {
+      mon.dataset.ids = want;
+      mon.innerHTML = rows.map(x => `<div class="mcard" data-t="${x.t}"><div class="mh"><b class="mn"></b><span class="ms mono"></span></div><div class="mb-wrap"></div><div class="mf small"></div></div>`).join('');
+    }
+    for (const x of rows) {
+      const c = mon.querySelector(`.mcard[data-t="${x.t}"]`), lv = live[x.t] && live[x.t].round === st.round ? live[x.t] : null;
+      const off = lv && lv.on === false && !x.done;
+      c.classList.toggle('fin', !!x.done); c.classList.toggle('gone', !!status(x) || off);
+      c.querySelector('.mn').textContent = `${x.place ? (MEDAL[x.place - 1] || x.place + '위') + ' ' : ''}${teamName(x.t, x.nick)}`;
+      c.querySelector('.ms').textContent = x.done ? fmt(x.score) : status(x) || (x.pct || 0) + '%';
+      drawMini(c.querySelector('.mb-wrap'), lv, lv?.n || st.n);
+      c.querySelector('.mf').innerHTML = `${x.algo ? ALGOS[x.algo].icon + ' ' + ALGOS[x.algo].short + ' · ' : ''}비교 ${x.cmp || 0} · 위반 <b style="color:var(--bad)">${x.miss || 0}</b>${st.relay && lv?.who ? ` · 🎮 ${lv.who}번 차례` : ''}${off ? ' · <b style="color:var(--bad)">🔴 연결 끊김</b>' : ''}`;
+      if (lv?.ev === 'miss' && c.dataset.at !== String(lv.at)) { c.dataset.at = lv.at; c.classList.remove('flash'); void c.offsetWidth; c.classList.add('flash'); }
+    }
+  }
+
+  // ⏸ 일시정지 / ▶ 계속
+  async function togglePause() {
+    const n = f.serverNow();
+    if (st.pausedAt) await f.D.update(r(f, `rooms/${code}/state`), { pauseTotal: (st.pauseTotal || 0) + (n - st.pausedAt), pausedAt: null });
+    else await f.D.update(r(f, `rooms/${code}/state`), { pausedAt: n });
+  }
+  function paintPause() {
+    const b = $('.pausebtn', box), note = $('.pausenote', box); if (!b) return;
+    b.textContent = st.pausedAt ? '▶ 계속하기' : '⏸ 일시정지';
+    b.classList.toggle('mint', !!st.pausedAt); b.classList.toggle('sub', !st.pausedAt);
+    if (note) note.hidden = !st.pausedAt;
+  }
+  // ⏹ 라운드 취소: 기록을 남기지 않고 준비 화면으로
+  async function cancelRound() {
+    if (!confirm('이번 라운드를 취소할까요? 기록은 저장하지 않고 준비 화면으로 돌아가요.')) return;
+    saved.add(code + '_' + st.round);
+    await f.D.set(r(f, `rooms/${code}/state`), { phase: 'lobby', round: st.round });
+    toast('라운드를 취소했어요. 설정을 고르고 다시 출발하면 돼요.');
   }
 
   async function reveal() {
     sfx.drum();
+    if (st.pausedAt) await togglePause();
     await saveRecord();
     setTimeout(() => f.D.update(r(f, `rooms/${code}/state`), { phase: 'result' }), 800);
   }
 
-  async function saveRecord() {
+  async function saveRecord(auto = false) {
     const key = code + '_' + st.round; if (saved.has(key)) return;
+    saved.add(key);
     const rows = rank(teams, prog), results = {};
-    for (const x of rows) results[x.t] = { nick: x.nick || '', algo: x.algo || (st.algo === 'pick' ? 'bubble' : st.algo), score: x.score || 0, ms: x.ms || 0, miss: x.miss || 0, cmp: x.cmp || 0, moves: x.moves || 0, pct: x.pct || 0, done: !!x.done, ...(x.place ? { place: x.place } : {}) };
+    for (const x of rows) results[x.t] = { nick: x.nick || '', algo: x.algo || (st.algo === 'pick' ? 'bubble' : st.algo), score: x.score || 0, ms: x.ms || 0, miss: x.miss || 0, cmp: x.cmp || 0, moves: x.moves || 0, pct: x.pct || 0, done: !!x.done, ...(x.place ? { place: x.place } : {}), ...(!x.done && (x.quit || x.left) ? { quit: true } : {}) };
     const rid = `${today()}_${code}`;
     try {
       await f.D.update(r(f, `records/${meta.cls}/${rid}`), { date: today(), code, [`rounds/${st.round}`]: { algo: st.algo, n: st.n, arr: makeArray(st.n, st.seed).join(','), final: !!st.final, at: f.serverNow(), results } });
-      saved.add(key);
-    } catch (e) { toast('기록을 저장하지 못했어요: ' + e.message, true, 4000); }
+      toast(auto ? '✅ 모든 모둠이 끝나서 기록을 저장했어요.' : '✅ 기록을 저장했어요.');
+    } catch (e) { saved.delete(key); toast('기록을 저장하지 못했어요: ' + e.message, true, 4000); }
   }
 
   function renderResult(main) {
@@ -269,7 +343,7 @@ export function mountHost(root) {
       <h2>🏆 ${st.final ? '결승' : st.round + '라운드'} 결과 ${st.algo !== 'pick' ? '· ' + ALGOS[st.algo].name : ''}</h2>
       <div class="podium">${rows.filter(x => x.place && x.place <= 3).map(x => `<div class="pd p${x.place}"><div class="md">${MEDAL[x.place - 1]}</div><b>${esc(teamName(x.t, x.nick))}</b><span class="mono">${fmt(x.score)}</span></div>`).join('') || '<p class="muted">완주한 모둠이 없어요.</p>'}</div>
       <div class="scroll-x"><table class="t"><tr><th>순위</th><th>모둠</th>${st.algo === 'pick' ? '<th>방법</th>' : ''}<th>기록</th><th>시간</th><th>위반</th><th>비교</th><th>이동</th></tr>
-      ${rows.map(x => `<tr><td>${x.place ? x.place + '위' : '미완주'}</td><td>${esc(teamName(x.t, x.nick))}</td>${st.algo === 'pick' ? `<td>${x.algo ? ALGOS[x.algo].icon + ' ' + ALGOS[x.algo].short : '-'}</td>` : ''}<td><b>${x.done ? fmt(x.score) : (x.pct || 0) + '%'}</b></td><td>${x.done ? fmt(x.ms) : '-'}</td><td>${x.miss || 0}</td><td>${x.cmp || 0}</td><td>${x.moves || 0}</td></tr>`).join('')}</table></div>
+      ${rows.map(x => `<tr><td>${x.place ? x.place + '위' : status(x) || '미완주'}</td><td>${esc(teamName(x.t, x.nick))}</td>${st.algo === 'pick' ? `<td>${x.algo ? ALGOS[x.algo].icon + ' ' + ALGOS[x.algo].short : '-'}</td>` : ''}<td><b>${x.done ? fmt(x.score) : (x.pct || 0) + '%'}</b></td><td>${x.done ? fmt(x.ms) : '-'}</td><td>${x.miss || 0}</td><td>${x.cmp || 0}</td><td>${x.moves || 0}</td></tr>`).join('')}</table></div>
     </div>
     <div class="card"><h2>🤔 같은 막대를 네 가지 방법으로 정렬하면?</h2>
       <p class="small mono">이번 배열: [${arr.join(', ')}]</p>

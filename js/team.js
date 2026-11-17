@@ -3,7 +3,7 @@ import { ALGOS, ALGO_KEYS, makeArray } from './sorts.js';
 import { createRunner } from './runner.js';
 import { sfx, unlock } from './sound.js';
 import { connect, signInTeam, r, bad, rank, teamName } from './net.js';
-import { $, esc, fmt, toast, countdown, store, segButtons } from './ui.js';
+import { $, esc, fmt, toast, countdown, store, segButtons, confirmBox } from './ui.js';
 
 const JOIN_KEY = 'sr-join';
 
@@ -81,8 +81,14 @@ export function mountTeam(root, { code: preCode } = {}) {
       </div>
       <div class="stagebox"></div>`;
     $('.leave', box).addEventListener('click', async () => {
-      if (!confirm('대항전에서 나갈까요? 모둠 자리가 비워져요.')) return;
+      const racing = runner && !runner.done && state?.phase === 'count';
+      const yes = racing
+        ? await confirmBox({ icon: '🚨', title: '지금 나가면 이번 라운드는 실패예요!', body: '레이스가 진행 중이에요. 나가면 우리 모둠 기록이 <b>❌ 실패(나감)</b>로 남고, 이번 라운드에는 다시 들어올 수 없어요.', ok: '그래도 나가기', cancel: '계속 도전하기', danger: true })
+        : await confirmBox({ icon: '🚪', title: '대항전에서 나갈까요?', body: '모둠 자리가 비워져요. 지금까지의 기록은 남아요.', ok: '나가기', cancel: '취소' });
+      if (!yes) return;
+      if (racing) { const s = runner.snapshot(); s.quit = true; await new Promise(res => { push(playingRound, s, true); setTimeout(res, 400); }); }
       off(); runner?.destroy(); runner = null;
+      await f.D.remove(r(f, `rooms/${code}/live/${t}`)).catch(() => {});
       await f.D.remove(r(f, `rooms/${code}/teams/${t}`)).catch(() => {});
       store(JOIN_KEY, null); joinForm();
     });
@@ -96,13 +102,15 @@ export function mountTeam(root, { code: preCode } = {}) {
       $('.me', box).textContent = teamName(t, info.nick);
     }));
     unsub.push(f.D.onValue(r(f, `rooms/${code}/state`), s => { state = s.val() || { phase: 'lobby', round: 0 }; onState(); }));
+    const liveOn = r(f, `rooms/${code}/live/${t}/on`);
+    unsub.push(f.D.onValue(r(f, '.info/connected'), s => { if (s.val() === true) { f.D.onDisconnect(liveOn).set(false).catch(() => {}); f.D.get(r(f, `rooms/${code}/live/${t}`)).then(x => { if (x.exists()) f.D.set(liveOn, true).catch(() => {}); }).catch(() => {}); } }));
   }
 
   const stageBox = () => $('.stagebox', box);
 
   async function onState() {
     const st = state, sb = stageBox(); if (!sb) return;
-    if (st.phase === 'lobby') { stopRunner(); sb.innerHTML = waitHtml('선생님이 라운드를 시작할 때까지 기다려요.', '그동안 모둠원끼리 1번부터 차례를 정해 두세요! 5번 조작할 때마다 다음 사람에게 넘어가요.'); return; }
+    if (st.phase === 'lobby') { stopRunner(); sb.innerHTML = waitHtml('선생님이 라운드를 시작할 때까지 기다려요.', '그동안 모둠원끼리 누가 막대를 옮길지, 누가 규칙을 확인할지 정해 두세요!'); return; }
     if (st.phase === 'end') { stopRunner(); store(JOIN_KEY, null); sb.innerHTML = waitHtml('오늘 대항전이 끝났어요!', '수고했어요. 어떤 정렬 방법이 가장 효율적이었는지 이야기해 봐요.', '🎉'); return; }
     if (st.phase === 'pick') return showPick(st);
     if (st.phase === 'count') return play(st);
@@ -131,14 +139,18 @@ export function mountTeam(root, { code: preCode } = {}) {
     tick();
   }
 
+  // 선생님이 멈춘 시간을 뺀 기준 시각
+  const effNow = () => { const st = state || {}; const n = f.serverNow(); return n - (st.pauseTotal || 0) - (st.pausedAt ? n - st.pausedAt : 0); };
+
   async function play(st) {
-    if (playingRound === st.round && runner) return;
+    if (playingRound === st.round && runner) { runner.setPaused(!!st.pausedAt); return; }
     stopRunner();
     const sb = stageBox();
     let algo = st.algo;
     if (algo === 'pick') algo = (await f.D.get(r(f, `rooms/${code}/pick/${st.round}/${t}`)).catch(() => null))?.val() || 'bubble';
     const prev = (await f.D.get(r(f, `rooms/${code}/prog/${st.round}/${t}`)).catch(() => null))?.val();
     if (prev && prev.done) return showMine(prev);
+    if (prev && prev.quit) { stageBox().innerHTML = waitHtml('이번 라운드는 ❌ 실패(나감)로 기록됐어요.', '다음 라운드부터 다시 참여할 수 있어요. 잠시 기다려 주세요.'); return; }
     playingRound = st.round;
     const A = ALGOS[algo];
     sb.innerHTML = `<div class="rule" style="margin-top:0"><div class="big-ic">${A.icon}</div>
@@ -146,11 +158,12 @@ export function mountTeam(root, { code: preCode } = {}) {
       <p class="small">📏 ${esc(A.rule)}</p></div><div class="run"></div>`;
     const arr = makeArray(st.n, st.seed);
     runner = createRunner($('.run', sb), {
-      algo, arr, members: info?.members || 4, hint: false, startAt: st.startAt, now: () => f.serverNow(),
+      algo, arr, members: info?.members || 4, relay: !!st.relay, hint: false, startAt: st.startAt, now: effNow,
       onStep: s => push(st.round, s),
       onDone: s => { push(st.round, s, true); setTimeout(() => showMine(s), 900); },
     });
     if (f.serverNow() < st.startAt && cdShown !== st.round) { cdShown = st.round; countdown(st.startAt, () => f.serverNow()); }
+    if (st.pausedAt) runner.setPaused(true);
     push(st.round, runner.snapshot(), true);
   }
 
@@ -159,7 +172,11 @@ export function mountTeam(root, { code: preCode } = {}) {
   function push(round, s, now = false) {
     if (sentDone === round) return; // 완주 기록을 보낸 뒤에는 더 보내지 않아요(규칙상 거부됨)
     if (s.done) { sentDone = round; now = true; }
-    const write = () => { lastPush = Date.now(); f.D.set(r(f, `rooms/${code}/prog/${round}/${t}`), { algo: s.algo, pct: s.pct, ms: s.ms, score: s.score, miss: s.miss, cmp: s.cmp, moves: s.moves, done: !!s.done }).catch(() => {}); };
+    const write = () => {
+      lastPush = Date.now();
+      f.D.set(r(f, `rooms/${code}/prog/${round}/${t}`), { algo: s.algo, pct: s.pct, ms: s.ms, score: s.score, miss: s.miss, cmp: s.cmp, moves: s.moves, done: !!s.done, nick: info?.nick || '', ...(s.quit ? { quit: true } : {}) }).catch(() => {});
+      if (s.view) f.D.set(r(f, `rooms/${code}/live/${t}`), { r0: s.view.r0, r0x: s.view.r0x, r1: s.view.r1, n: s.view.n, who: s.who || 1, ev: s.ev || '', on: true, round, at: f.serverNow() }).catch(() => {});
+    };
     clearTimeout(pushTimer);
     if (now || Date.now() - lastPush > 330) write(); else pushTimer = setTimeout(write, 330);
   }
@@ -183,6 +200,8 @@ export function mountTeam(root, { code: preCode } = {}) {
     if (mine?.place === 1) sfx.fanfare();
   }
 
+  const beforeUnload = e => { if (runner && !runner.done && state?.phase === 'count') { e.preventDefault(); e.returnValue = ''; } };
+  window.addEventListener('beforeunload', beforeUnload);
   start();
-  return { destroy() { off(); stopRunner(); } };
+  return { destroy() { window.removeEventListener('beforeunload', beforeUnload); off(); stopRunner(); } };
 }

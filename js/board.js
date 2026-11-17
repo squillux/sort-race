@@ -152,3 +152,40 @@ export function missText(g, exp) {
   }
   return '';
 }
+
+/* ---------- 모니터링용: 보드 상태를 짧은 문자열로 (값.상태코드, ...) ----------
+   상태코드: n 보통, a 비교 중, l 고정, s 정리된 구역, k 들어 올린 막대, h 묶음 맨 앞, o 합친 결과, p 정리 안 된 구역 */
+export function compactView(g) {
+  const a = g.a, n = a.length, vw = g.view();
+  const st = new Map(a.map((v, i) => [v, { x: i, row: 0, c: 'n' }]));
+  if (g.done) a.forEach(v => { st.get(v).c = 'l'; });
+  else if (vw.kind === 'bubble') {
+    a.forEach((v, i) => { if (i >= vw.lockedFrom) st.get(v).c = 'l'; });
+    vw.pair.forEach(i => { st.get(a[i]).c = 'a'; });
+  } else if (vw.kind === 'selection') {
+    a.forEach((v, i) => { st.get(v).c = i < vw.lockedBefore ? 'l' : 'p'; });
+  } else if (vw.kind === 'insertion') {
+    a.forEach((v, i) => { if (i < vw.sortedUpTo) st.get(v).c = 's'; if (i === vw.k) st.get(v).c = 'k'; });
+  } else if (vw.kind === 'merge') {
+    for (let i = vw.lo; i < vw.li; i++) st.delete(a[i]);
+    for (let i = vw.mid; i < vw.ri; i++) st.delete(a[i]);
+    vw.out.forEach((v, k) => st.set(v, { x: vw.lo + k, row: 1, c: 'o' }));
+    if (vw.li < vw.mid) st.get(a[vw.li]).c = 'h';
+    if (vw.ri < vw.hi) st.get(a[vw.ri]).c = 'h';
+  }
+  const rows = [[], []];
+  for (const [v, p] of st) rows[p.row].push([p.x, `${v}.${p.c}`]);
+  const s = r => r.sort((x, y) => x[0] - y[0]).map(x => x[1]).join(',');
+  const r1 = rows[1].length ? rows[1].map(x => `${x[0]}:${x[1]}`).sort((x, y) => parseInt(x) - parseInt(y)).join(',') : '';
+  return { n, r0: s(rows[0]), r1, r0x: rows[0].map(x => x[0]).sort((p, q) => p - q).join(',') };
+}
+
+// 교사 모니터에 작은 보드 그리기
+export function drawMini(el, live, n) {
+  if (!live || !live.r0) { el.innerHTML = '<p class="small muted" style="margin:30px 0;text-align:center">아직 화면 정보가 없어요</p>'; return; }
+  const W = 100 / n, xs = (live.r0x || '').split(',').map(Number);
+  const bar = (tok, x) => { const [v, c] = tok.split('.'); return `<i class="mb c-${c}" style="left:${x * W}%;width:${W}%"><s style="height:${14 + v * 0.86}%"></s><b>${v}</b></i>`; };
+  const r0 = live.r0.split(',').map((tok, i) => bar(tok, xs[i] ?? i)).join('');
+  const r1 = live.r1 ? live.r1.split(',').map(t => { const [x, tok] = t.split(':'); return bar(tok, +x); }).join('') : '';
+  el.innerHTML = `<div class="mini ${live.r1 ? 'two' : ''}"><div class="mrow r0">${r0}</div>${live.r1 ? `<div class="mrow r1">${r1}</div>` : ''}</div>`;
+}
