@@ -103,14 +103,15 @@ export function mountTeam(root, { code: preCode } = {}) {
   async function onState() {
     const st = state, sb = stageBox(); if (!sb) return;
     if (st.phase === 'lobby') { stopRunner(); sb.innerHTML = waitHtml('선생님이 라운드를 시작할 때까지 기다려요.', '그동안 모둠원끼리 1번부터 차례를 정해 두세요! 5번 조작할 때마다 다음 사람에게 넘어가요.'); return; }
-    if (st.phase === 'end') { stopRunner(); store(JOIN_KEY, null); sb.innerHTML = waitHtml('🎉 오늘 대항전이 끝났어요!', '수고했어요. 어떤 정렬 방법이 가장 효율적이었는지 이야기해 봐요.'); return; }
+    if (st.phase === 'end') { stopRunner(); store(JOIN_KEY, null); sb.innerHTML = waitHtml('오늘 대항전이 끝났어요!', '수고했어요. 어떤 정렬 방법이 가장 효율적이었는지 이야기해 봐요.', '🎉'); return; }
     if (st.phase === 'pick') return showPick(st);
     if (st.phase === 'count') return play(st);
     if (st.phase === 'result') return showResult(st);
   }
 
-  function waitHtml(title, sub) {
-    return `<div class="card" style="text-align:center;padding:36px 16px"><div style="font-size:3rem">⏳</div><h2>${esc(title)}</h2><p class="muted">${esc(sub)}</p></div>`;
+  function waitHtml(title, sub, icon = '⏳') {
+    const ic = icon === '⏳' ? '<div class="hourglass" aria-hidden="true">⏳</div>' : `<div style="font-size:3rem">${icon}</div>`;
+    return `<div class="card" style="text-align:center;padding:36px 16px">${ic}<h2>${esc(title)}</h2><p class="muted">${esc(sub)}</p></div>`;
   }
 
   function stopRunner() { runner?.destroy(); runner = null; clearTimeout(pushTimer); }
