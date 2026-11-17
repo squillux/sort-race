@@ -150,7 +150,7 @@ export function mountTeam(root, { code: preCode } = {}) {
     if (algo === 'pick') algo = (await f.D.get(r(f, `rooms/${code}/pick/${st.round}/${t}`)).catch(() => null))?.val() || 'bubble';
     const prev = (await f.D.get(r(f, `rooms/${code}/prog/${st.round}/${t}`)).catch(() => null))?.val();
     if (prev && prev.done) return showMine(prev);
-    if (prev && prev.quit) { stageBox().innerHTML = waitHtml('이번 라운드는 ❌ 실패(나감)로 기록됐어요.', '다음 라운드부터 다시 참여할 수 있어요. 잠시 기다려 주세요.'); return; }
+    if (prev && prev.quit) { stageBox().innerHTML = waitHtml('이번 라운드는 ❌ 실패(나감)로 기록됐어요.', st.allDone ? '경기가 끝났어요. 곧 순위가 공개됩니다!' : '다음 라운드부터 다시 참여할 수 있어요. 잠시 기다려 주세요.'); return; }
     playingRound = st.round;
     const A = ALGOS[algo];
     sb.innerHTML = `<div class="rule" style="margin-top:0"><div class="big-ic">${A.icon}</div>
@@ -184,9 +184,10 @@ export function mountTeam(root, { code: preCode } = {}) {
   function showMine(s) {
     if (!stageBox()) return;
     stopRunner();
+    const all = state?.phase === 'count' && state.allDone;
     stageBox().innerHTML = `<div class="card" style="text-align:center;padding:28px 16px"><div style="font-size:3rem">🏁</div>
       <h2>완주! 기록 ${fmt(s.score)}</h2><p class="muted">시간 ${fmt(s.ms)} + 위반 ${s.miss}회 × 3초 · 비교 ${s.cmp}번 · 이동 ${s.moves}번</p>
-      <p>다른 모둠이 끝날 때까지 기다려요. 순위는 선생님 화면에 나와요! 📺</p></div>`;
+      ${all ? '<div class="alldone" style="justify-content:center;text-align:left"><div class="ad-ic hourglass">⏳</div><div><b>경기 종료! 모든 모둠이 끝났어요.</b><br><span>곧 순위가 공개됩니다! 선생님 화면을 봐 주세요 📺</span></div></div>' : '<p>다른 모둠이 끝날 때까지 기다려요. 모두 끝나면 순위가 공개돼요! 📺</p>'}</div>`;
   }
 
   async function showResult(st) {

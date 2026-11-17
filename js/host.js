@@ -156,7 +156,13 @@ export function mountHost(root) {
     }
     if (st.phase === 'count') { updateLanes(); if (view === 'monitor') updateMonitor(); }
     const rows = rank(teams, prog);
-    if (st.phase === 'count' && rows.length && rows.every(x => x.done || x.quit || x.left)) saveRecord(true);
+    if (st.phase === 'count' && rows.length && rows.every(x => x.done || x.quit || x.left)) {
+      saveRecord(true);
+      if (!st.allDone) {
+        const endMs = Math.max(0, ...rows.filter(x => x.done || x.quit).map(x => x.ms || 0));
+        f.D.update(r(f, `rooms/${code}/state`), { allDone: true, endMs, pausedAt: null }).catch(() => {});
+      }
+    }
   }
 
   function schedulePick() {
@@ -230,6 +236,7 @@ export function mountHost(root) {
           <button class="btn ghost cancelbtn">⏹ 라운드 취소</button>
         </div>
         <div class="pausenote" hidden>⏸ 일시정지 중이에요. 학생 화면도 멈춰 있고, 시간도 흐르지 않아요.</div>
+        <div class="alldone" hidden><div class="ad-ic">🏁</div><div><b>경기 종료! 모든 모둠이 끝났어요.</b><br><span>시간을 멈췄어요. 곧 순위가 공개됩니다! 아래 <b>🏆 결과 발표</b>를 눌러 주세요.</span></div></div>
         <div class="lanes big"></div>
         <div class="monitor" hidden></div>
         <div class="row" style="margin-top:12px"><button class="btn on lg reveal">🏆 결과 발표</button><span class="small muted donecnt"></span></div></div>`;
@@ -239,7 +246,7 @@ export function mountHost(root) {
       $('.cancelbtn', main).addEventListener('click', cancelRound);
       showView(); paintPause();
       const clock = $('.clock', main);
-      const tick = () => { if (!clock.isConnected) return; clock.textContent = fmt(Math.max(0, effNow() - st.startAt)); raf = requestAnimationFrame(tick); };
+      const tick = () => { if (!clock.isConnected) return; clock.textContent = st.allDone ? '⏹ ' + fmt(st.endMs || 0) : fmt(Math.max(0, effNow() - st.startAt)); clock.classList.toggle('stopped', !!st.allDone); raf = requestAnimationFrame(tick); };
       tick();
       return;
     }
@@ -262,18 +269,18 @@ export function mountHost(root) {
 
   function updateLanes() {
     const lanes = $('.lanes.big', box); if (!lanes) return;
-    const rows = rank(teams, prog);
+    const rows = rank(teams, prog).sort((a, b) => a.t - b.t); // 결과 발표 전에는 순위를 숨기고 모둠 번호 순서로
     lanes.innerHTML = rows.map(x => {
       const algoName = x.algo ? ALGOS[x.algo].icon + ' ' + ALGOS[x.algo].short : '';
       const off = live[x.t] && live[x.t].on === false && !x.done;
       return `<div class="lane ${x.done ? 'fin' : ''} ${status(x) ? 'gone' : ''}">
-        <b class="nm">${x.place ? MEDAL[x.place - 1] || x.place + '위' : status(x) ? '🚪' : '🏃'} ${esc(teamName(x.t, x.nick))}</b>
+        <b class="nm">${x.done ? '🏁' : status(x) ? '🚪' : '🏃'} ${esc(teamName(x.t, x.nick))}</b>
         <div class="track"><i style="width:${x.done ? 100 : x.pct || 0}%"></i></div>
-        <span class="tm mono">${x.done ? fmt(x.score) : status(x) || (x.pct || 0) + '%'}</span>
+        <span class="tm mono">${x.done ? '완주 ' + fmt(x.score) : status(x) || (x.pct || 0) + '%'}</span>
         <span class="sub small muted">${st.algo === 'pick' ? algoName + ' · ' : ''}위반 ${x.miss || 0}${off ? ' · <span style="color:var(--bad)">🔴 연결 끊김</span>' : ''}</span></div>`;
     }).join('');
     const d = rows.filter(x => x.done).length, gone = rows.filter(x => !x.done && (x.quit || x.left)).length, el = $('.donecnt', box);
-    if (el) el.textContent = `완주 ${d} / ${rows.length}모둠${gone ? ` (나감 ${gone})` : ''}${d + gone === rows.length && rows.length ? ' · 모두 끝났어요! 기록은 저장했어요. 결과를 발표해 주세요.' : ''}`;
+    if (el) el.textContent = `완주 ${d} / ${rows.length}모둠${gone ? ` (나감 ${gone})` : ''}${d + gone === rows.length && rows.length ? (st.practice ? ' · 모두 끝났어요! (연습 라운드라 기록은 남기지 않아요)' : ' · 모두 끝났어요! 기록은 저장했어요.') : ''}`;
   }
 
   // 🖥 모니터링: 모둠 화면의 막대 상태를 그대로 다시 그려요
@@ -296,7 +303,7 @@ export function mountHost(root) {
       const c = mon.querySelector(`.mcard[data-t="${x.t}"]`), lv = live[x.t] && live[x.t].round === st.round ? live[x.t] : null;
       const off = lv && lv.on === false && !x.done;
       c.classList.toggle('fin', !!x.done); c.classList.toggle('gone', !!status(x) || off);
-      c.querySelector('.mn').textContent = `${x.place ? (MEDAL[x.place - 1] || x.place + '위') + ' ' : ''}${teamName(x.t, x.nick)}`;
+      c.querySelector('.mn').textContent = `${x.done ? '🏁 ' : ''}${teamName(x.t, x.nick)}`;
       c.querySelector('.ms').textContent = x.done ? fmt(x.score) : status(x) || (x.pct || 0) + '%';
       drawMini(c.querySelector('.mb-wrap'), lv, lv?.n || st.n);
       c.querySelector('.mf').innerHTML = `${x.algo ? ALGOS[x.algo].icon + ' ' + ALGOS[x.algo].short + ' · ' : ''}비교 ${x.cmp || 0} · 위반 <b style="color:var(--bad)">${x.miss || 0}</b>${st.relay && lv?.who ? ` · 🎮 ${lv.who}번 차례` : ''}${off ? ' · <b style="color:var(--bad)">🔴 연결 끊김</b>' : ''}`;
@@ -312,6 +319,10 @@ export function mountHost(root) {
   }
   function paintPause() {
     const b = $('.pausebtn', box), note = $('.pausenote', box); if (!b) return;
+    const ad = $('.alldone', box), rv = $('.reveal', box);
+    if (ad) { const was = !ad.hidden; ad.hidden = !st.allDone; if (st.allDone && !was) sfx.relay(); }
+    rv?.classList.toggle('pulse', !!st.allDone);
+    b.hidden = !!st.allDone; $('.cancelbtn', box) && ($('.cancelbtn', box).hidden = !!st.allDone);
     b.textContent = st.pausedAt ? '▶ 계속하기' : '⏸ 일시정지';
     b.classList.toggle('mint', !!st.pausedAt); b.classList.toggle('sub', !st.pausedAt);
     if (note) note.hidden = !st.pausedAt;

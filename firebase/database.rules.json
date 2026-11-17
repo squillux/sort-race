@@ -67,6 +67,12 @@
           "practice": {
             ".validate": "newData.isBoolean()"
           },
+          "allDone": {
+            ".validate": "newData.isBoolean()"
+          },
+          "endMs": {
+            ".validate": "newData.isNumber() && newData.val() >= 0"
+          },
           "$other": {
             ".validate": false
           }
