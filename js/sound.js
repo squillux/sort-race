@@ -64,6 +64,7 @@ export const sfx = {
 export function volButton(el) {
   const steps = [0, 0.15, 0.35, 0.7];
   const paint = () => { el.textContent = vol <= 0 ? '🔇 소리 끔' : vol < 0.25 ? '🔈 작게' : vol < 0.5 ? '🔉 보통' : '🔊 크게'; };
+  el.__paint = paint;
   el.addEventListener('click', () => {
     const i = steps.findIndex(s => s >= vol - 0.001);
     setVol(steps[(i + 1) % steps.length]); paint(); unlock(); sfx.pop();

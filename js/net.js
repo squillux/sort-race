@@ -65,8 +65,10 @@ export function rank(teams, prog) {
     const tm = teams[t], p = prog[t] || {};
     return { t: +t, ...p, nick: tm?.nick || p.nick || '', members: tm?.members, left: !tm };
   });
-  rows.sort((a, b) => (b.done ? 1 : 0) - (a.done ? 1 : 0) || (a.done ? a.score - b.score : (b.pct || 0) - (a.pct || 0)) || a.t - b.t);
-  let place = 0; rows.forEach((x, i) => { if (x.done) x.place = ++place; });
+  rows.sort((a, b) => (b.done ? 1 : 0) - (a.done ? 1 : 0) || (a.done ? (a.score - b.score) || (a.miss || 0) - (b.miss || 0) || (a.ms || 0) - (b.ms || 0) : (b.pct || 0) - (a.pct || 0)) || a.t - b.t);
+  // 기록·위반·시간이 모두 같으면 같은 등수
+  let place = 0, prev = null;
+  rows.forEach((x, i) => { if (!x.done) return; const same = prev && prev.score === x.score && (prev.miss || 0) === (x.miss || 0) && prev.ms === x.ms; x.place = same ? prev.place : i + 1; place = x.place; prev = x; });
   return rows;
 }
 

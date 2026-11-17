@@ -27,6 +27,8 @@ async function route() {
   const [path, query] = (location.hash.slice(1) || '/').split('?');
   const q = new URLSearchParams(query || '');
   window.scrollTo(0, 0);
+  // 저장된 소리 설정이 없으면: 교사 화면은 켜짐, 학생 기기는 꺼짐
+  initSound(/^\/(host|records)/.test(path) ? 0.7 : 0); $('.vol').__paint?.();
   if (path === '/learn') { const m = await import('./learn.js'); current = m.mountLearn(app, { algo: q.get('a') }); }
   else if (path === '/practice') { const m = await import('./practice.js'); current = m.mountPractice(app); }
   else if (path === '/join') { const m = await import('./team.js'); current = m.mountTeam(app, { code: q.get('c') }); }
@@ -35,8 +37,7 @@ async function route() {
   else app.innerHTML = HOME;
 }
 
-const isHost = /^#\/(host|records)/.test(location.hash);
-initSound(isHost ? 0.7 : 0.15);
+initSound(/^#\/(host|records)/.test(location.hash) ? 0.7 : 0); // 컴퓨터실에서 여러 대가 동시에 울리지 않게 학생 기기는 기본 꺼짐
 volButton($('.vol'));
 document.addEventListener('pointerdown', unlock, { once: true });
 window.addEventListener('hashchange', route);

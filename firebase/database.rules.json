@@ -64,6 +64,9 @@
           "relay": {
             ".validate": "newData.isBoolean()"
           },
+          "practice": {
+            ".validate": "newData.isBoolean()"
+          },
           "$other": {
             ".validate": false
           }

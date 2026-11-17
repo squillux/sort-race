@@ -10,7 +10,7 @@ const MEDAL = ['🥇', '🥈', '🥉'];
 
 export function mountHost(root) {
   let f = null, me = null, code = null, meta = null, st = null, teams = {}, prog = {}, picks = {}, live = {}, unsub = [], progUnsub = null, pickUnsub = null, liveUnsub = null, raf = 0, finishedSeen = new Set(), saved = new Set(), autoPickTimer = null, view = 'race';
-  let cfg = { algo: 'bubble', n: 8, final: false, relay: false };
+  let cfg = { algo: 'bubble', n: 8, final: false, relay: false, practice: false };
   const off = () => { unsub.forEach(u => u()); unsub = []; progUnsub?.(); progUnsub = null; pickUnsub?.(); pickUnsub = null; liveUnsub?.(); liveUnsub = null; cancelAnimationFrame(raf); clearTimeout(autoPickTimer); };
   // 멈춘 시간을 뺀 경과 시간 기준 시각
   const effNow = () => { const n = f.serverNow(); return n - (st?.pauseTotal || 0) - (st?.pausedAt ? n - st.pausedAt : 0); };
@@ -112,10 +112,14 @@ export function mountHost(root) {
           <div class="bigcode mono">${c}</div>
           <div class="small muted">학생: 첫 화면 → <b>대항전 참여</b> → 코드 입력 (또는 QR)</div>
         </div>
-        <div class="row" style="align-self:flex-start"><a class="btn ghost small" href="#/records">📒 기록</a><button class="btn ghost small endbtn">수업 끝내기</button></div>
+        <div class="row" style="align-self:flex-start"><button class="btn ghost small fsbtn">⛶ 전체화면</button><a class="btn ghost small" href="#/records">📒 기록</a><button class="btn ghost small endbtn">수업 끝내기</button></div>
       </div>
       <div class="main"></div>`;
     drawQr($('.qr', box), joinUrl(c));
+    const fsb = $('.fsbtn', box);
+    const fsPaint = () => { fsb.textContent = document.fullscreenElement ? '⛶ 전체화면 끝' : '⛶ 전체화면'; };
+    if (!document.documentElement.requestFullscreen) fsb.remove();
+    else { fsb.addEventListener('click', () => { (document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen()).catch(() => {}); }); document.addEventListener('fullscreenchange', fsPaint); }
     $('.endbtn', box).addEventListener('click', async () => {
       if (!confirm('대항전을 끝낼까요? 학생 화면에 종료 안내가 나와요. (진행 중인 라운드 기록도 저장돼요)')) return;
       if (st?.phase === 'count' || st?.phase === 'result') await saveRecord();
@@ -164,7 +168,7 @@ export function mountHost(root) {
   async function go(extra = {}) {
     unlock();
     const round = st.phase === 'pick' ? st.round : (st.round || 0) + 1;
-    const next = { phase: 'count', round, algo: extra.algo || cfg.algo, n: cfg.n, seed: st.phase === 'pick' ? st.seed : Math.floor(Math.random() * 2e9), startAt: f.serverNow() + 4000, final: !!(extra.algo === 'pick' || cfg.final), relay: !!cfg.relay, pauseTotal: 0 };
+    const next = { phase: 'count', round, algo: extra.algo || cfg.algo, n: cfg.n, seed: st.phase === 'pick' ? st.seed : Math.floor(Math.random() * 2e9), startAt: f.serverNow() + 4000, final: !!(extra.algo === 'pick' || cfg.final), relay: !!cfg.relay, pauseTotal: 0, practice: extra.algo === 'pick' ? false : !!cfg.practice };
     await f.D.set(r(f, `rooms/${code}/state`), next);
   }
 
@@ -186,7 +190,8 @@ export function mountHost(root) {
           <h2>⚙ ${(st.round || 0) + 1}라운드 준비</h2>
           <p><b>정렬 방법</b></p><div class="al"></div>
           <p style="margin-top:10px"><b>막대 수</b></p><div class="nn"></div>
-          <p style="margin-top:10px"><label><input type="checkbox" class="relaychk" ${cfg.relay ? 'checked' : ''}> 🎮 릴레이 교대 알림 (5번 조작마다 "다음 사람!")</label></p>
+          <p style="margin-top:10px"><label><input type="checkbox" class="relaychk" ${cfg.relay ? 'checked' : ''}> 🎮 릴레이 교대 알림 (5번 조작마다 "다음 사람!")</label><br>
+            <label><input type="checkbox" class="practicechk" ${cfg.practice ? 'checked' : ''}> 🧪 연습 라운드 (순위는 보여 주지만 기록에는 남기지 않아요. 결승에는 적용 안 됨)</label></p>
           <div class="row" style="margin-top:14px">
             <button class="btn lg gobtn" ${nTeams ? '' : 'disabled'}>▶ 모두 동시에 출발 (3초 카운트다운)</button>
             <button class="btn on lg pickbtn" ${nTeams ? '' : 'disabled'}>🏆 결승: 모둠이 방법 고르기 (30초)</button>
@@ -196,6 +201,7 @@ export function mountHost(root) {
       segButtons($('.al', main), ALGO_KEYS.map(k => ({ v: k, html: `${ALGOS[k].icon} ${ALGOS[k].name}${k === 'merge' ? ' <span class="tag dare">도전</span>' : ''}` })), cfg.algo, v => { cfg.algo = v; });
       segButtons($('.nn', main), [6, 8, 10].map(x => ({ v: String(x), label: x + '개' + (x === 10 ? ' (결승 추천)' : '') })), String(cfg.n), v => { cfg.n = +v; });
       $('.relaychk', main).addEventListener('change', e => { cfg.relay = e.target.checked; });
+      $('.practicechk', main).addEventListener('change', e => { cfg.practice = e.target.checked; });
       $('.gobtn', main).addEventListener('click', () => go());
       $('.pickbtn', main).addEventListener('click', startPick);
       bindKick(main);
@@ -215,7 +221,7 @@ export function mountHost(root) {
     if (st.phase === 'count') {
       const A = ALGOS[st.algo];
       main.innerHTML = `<div class="card race">
-        <div class="row" style="justify-content:space-between"><h2 style="margin:0">${st.final ? '🏆 결승' : st.round + '라운드'} · ${st.algo === 'pick' ? '모둠별 선택' : A.icon + ' ' + A.name} · 막대 ${st.n}개</h2>
+        <div class="row" style="justify-content:space-between"><h2 style="margin:0">${st.practice ? '🧪 연습 · ' : ''}${st.final ? '🏆 결승' : st.round + '라운드'} · ${st.algo === 'pick' ? '모둠별 선택' : A.icon + ' ' + A.name} · 막대 ${st.n}개</h2>
           <div class="clock mono">0.0초</div></div>
         <div class="row ctlbar">
           <span class="seg viewsel"></span>
@@ -328,6 +334,7 @@ export function mountHost(root) {
   async function saveRecord(auto = false) {
     const key = code + '_' + st.round; if (saved.has(key)) return;
     saved.add(key);
+    if (st.practice) { if (!auto) toast('🧪 연습 라운드라 기록에는 남기지 않았어요.'); return; }
     const rows = rank(teams, prog), results = {};
     for (const x of rows) results[x.t] = { nick: x.nick || '', algo: x.algo || (st.algo === 'pick' ? 'bubble' : st.algo), score: x.score || 0, ms: x.ms || 0, miss: x.miss || 0, cmp: x.cmp || 0, moves: x.moves || 0, pct: x.pct || 0, done: !!x.done, ...(x.place ? { place: x.place } : {}), ...(!x.done && (x.quit || x.left) ? { quit: true } : {}) };
     const rid = `${today()}_${code}`;
@@ -340,7 +347,7 @@ export function mountHost(root) {
   function renderResult(main) {
     const rows = rank(teams, prog), arr = makeArray(st.n, st.seed), cmp = compareAll(arr), max = Math.max(...ALGO_KEYS.map(k => cmp[k].cmp));
     main.innerHTML = `<div class="card">
-      <h2>🏆 ${st.final ? '결승' : st.round + '라운드'} 결과 ${st.algo !== 'pick' ? '· ' + ALGOS[st.algo].name : ''}</h2>
+      <h2>🏆 ${st.practice ? '🧪 연습 · ' : ''}${st.final ? '결승' : st.round + '라운드'} 결과 ${st.algo !== 'pick' ? '· ' + ALGOS[st.algo].name : ''}</h2>
       <div class="podium">${rows.filter(x => x.place && x.place <= 3).map(x => `<div class="pd p${x.place}"><div class="md">${MEDAL[x.place - 1]}</div><b>${esc(teamName(x.t, x.nick))}</b><span class="mono">${fmt(x.score)}</span></div>`).join('') || '<p class="muted">완주한 모둠이 없어요.</p>'}</div>
       <div class="scroll-x"><table class="t"><tr><th>순위</th><th>모둠</th>${st.algo === 'pick' ? '<th>방법</th>' : ''}<th>기록</th><th>시간</th><th>위반</th><th>비교</th><th>이동</th></tr>
       ${rows.map(x => `<tr><td>${x.place ? x.place + '위' : status(x) || '미완주'}</td><td>${esc(teamName(x.t, x.nick))}</td>${st.algo === 'pick' ? `<td>${x.algo ? ALGOS[x.algo].icon + ' ' + ALGOS[x.algo].short : '-'}</td>` : ''}<td><b>${x.done ? fmt(x.score) : (x.pct || 0) + '%'}</b></td><td>${x.done ? fmt(x.ms) : '-'}</td><td>${x.miss || 0}</td><td>${x.cmp || 0}</td><td>${x.moves || 0}</td></tr>`).join('')}</table></div>

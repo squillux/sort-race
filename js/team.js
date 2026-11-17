@@ -195,7 +195,9 @@ export function mountTeam(root, { code: preCode } = {}) {
     const rows = rank(teams, p), mine = rows.find(x => x.t === t);
     stageBox().innerHTML = `<div class="card" style="text-align:center"><div style="font-size:3rem">${mine?.place === 1 ? '🥇' : mine?.place === 2 ? '🥈' : mine?.place === 3 ? '🥉' : '🏅'}</div>
       <h2>${st.round}라운드 결과: ${mine?.place ? mine.place + '위' : '미완주'}</h2>
-      ${mine?.done ? `<p class="muted">기록 ${fmt(mine.score)} · 비교 ${mine.cmp}번</p>` : ''}
+      ${mine?.done ? `<p class="muted">기록 ${fmt(mine.score)} · 비교 ${mine.cmp}번</p>` : ''}${st.practice ? '<p><span class="tag std">연습 라운드 · 기록에 남지 않아요</span></p>' : ''}
+      <div class="scroll-x" style="margin-top:10px"><table class="t"><tr><th>순위</th><th>모둠</th><th>기록</th><th>위반</th><th>비교</th></tr>
+      ${rows.map(x => `<tr class="${x.t === t ? 'mine' : ''}"><td>${x.place ? (['🥇','🥈','🥉'][x.place - 1] || x.place + '위') : (x.quit || x.left ? '❌ 실패' : '미완주')}</td><td>${esc(teamName(x.t, x.nick))}${x.t === t ? ' (우리)' : ''}</td><td>${x.done ? fmt(x.score) : (x.pct || 0) + '%'}</td><td>${x.miss || 0}</td><td>${x.cmp || 0}</td></tr>`).join('')}</table></div>
       <p class="small muted">다음 라운드를 기다려요.</p></div>`;
     if (mine?.place === 1) sfx.fanfare();
   }

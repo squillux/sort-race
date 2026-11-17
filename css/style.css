@@ -238,3 +238,4 @@ table.t th{color:var(--muted);font-weight:700;background:var(--bg)}
 .mb.c-p s{background:#9db6ff}
 .btn.danger{background:var(--bad);color:#fff}
 .overlay.confirm .box{border-top:8px solid var(--bad)}
+table.t tr.mine td{background:var(--yellow-soft);font-weight:800}
