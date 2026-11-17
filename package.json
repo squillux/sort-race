@@ -1,0 +1,8 @@
+{
+  "name": "bar-sort-race",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node tests/sorts.test.mjs"
+  }
+}
